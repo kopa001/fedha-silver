@@ -1,0 +1,6 @@
+{
+  "name": "FEDHA Silver MMF",
+  "description": "Silver-backed savings money market fund you can start with KSh 0.01. Backed by a 200 kg physical silver reserve plus a liquid cash sleeve.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

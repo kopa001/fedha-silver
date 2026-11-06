@@ -1,0 +1,321 @@
+# MASTER BUILD PROMPT: FEDHA Silver Money Market Fund (Silver MMF)
+
+> Paste everything below into your AI app generator (Lovable, Bolt, v0, Replit Agent, Base44, etc.). If there is a length limit, paste Parts 1–6 first, then send each later Part after the previous one builds.
+
+---
+
+## PART 1: WHAT TO BUILD
+
+Build a complete, production-quality, mobile-first web application: **FEDHA Silver MMF**, a **silver-backed, money-market-fund-style product** where people subscribe to and redeem **FEDHA units** at a daily **NAV (net asset value) per unit**, backed by a **fixed base reserve of 200 kg of physical silver** plus a small cash liquidity sleeve that earns income. Tagline: **"Silver-backed savings you can start with KSh 0.01."**
+
+This is **only** a silver fund app. No farming, produce, logistics, jewelry, USSD, SMS, order book, escrow or producer-deposit modules.
+
+### 1.1 How the fund works (core concept)
+- The fund holds a **base reserve of 200 kg (200,000 g) of physical silver**, held with a custodian in a vault. This reserve is the backing for all units. It is a fixed starting holding recorded in the system, not the result of customer deposits.
+- Investors **subscribe** (buy) and **redeem** (sell) **FEDHA units** directly with the fund at NAV. There is no trading between users and no order book; the fund is the counterparty, like a money market fund.
+- **Launch price: 1 FEDHA unit = KSh 50.00 at launch.** At launch, the fund fixes how much silver each unit represents: `gramsPerUnit = 50 ÷ (silver price in KSh per gram at launch)`. That silver content is then **fixed forever**; after launch the unit's NAV moves with the silver price, plus income, minus fees.
+- **Maximum units** the fund can issue = `baseReserveGrams ÷ gramsPerUnit` (with the reserve buffer in 5.3). Subscriptions stop automatically when the cap is reached; show "Fund at capacity" and a waitlist.
+- A small **liquidity sleeve** (default target 10% of fund value) is held in short-term KSh instruments (simulated: treasury bills / call deposits) to pay redemptions instantly and earn **income**. This income accrues daily into NAV.
+- **Important honesty rule:** because the unit is linked to the silver price, **NAV is not stable and can fall as well as rise**. This is a *silver-linked* fund with money-market-style mechanics (daily NAV, easy subscribe/redeem, accrued income, transparent holdings). Never call it risk-free, guaranteed, capital-protected or "stable value".
+
+### 1.2 Roles
+| Role | Purpose |
+|---|---|
+| **Investor** | Anyone who subscribes, holds, redeems, sends units, and views statements |
+| **Custodian Operator** | Records physical silver holdings and releases physical silver for redemptions (single operator action; see 5.7 for controls) |
+| **Fund Manager/Admin** | Manages NAV settings, fees, limits, allocation targets, price sources, notices |
+| **Compliance Officer** | KYC review, suspicious-activity queue, limits, freezes |
+| **Auditor (read-only)** | Reads holdings, NAV history, ledger integrity, attestations |
+
+Permissions are enforced at the data layer (row-level security), not only in the UI.
+
+### 1.3 Non-negotiable principles
+1. **Price-wise minimum:** an investor can subscribe with as little as **0.01 in their payment currency** (KSh default; USD/EUR/GBP optional for non-resident investors). The app converts it to units at NAV.
+2. **KSh first, units second.** Show KSh value in large type with units beneath ("KSh 8,400 · 168 units"), with a toggle to flip.
+3. **Honest about risk.** Silver prices go up and down. No guarantees, no promised yields, no "investment advice". A mandatory first-subscription risk card.
+4. **Demo mode is a simulated ledger.** Clearly label **"DEMO. No real money or real silver."** All external dependencies (silver price, FX, treasury-rate, payments, KYC, custodian attestation, OTP delivery) sit behind swappable adapters with working mocks. Never fake a live integration.
+5. **Mobile-first, low-bandwidth, accessible** (WCAG AA, 48px tap targets, PWA with offline cache of last NAV and balances).
+6. **Multilingual:** English and Kiswahili complete; Kikuyu, Luhya, Dholuo, Kimeru best-effort, flagged `// NEEDS NATIVE REVIEW`.
+7. **Channels:** web/PWA app and in-app, push and email notifications only. **No USSD and no SMS features.** (Phone-number login still needs an OTP delivery method: implement it behind an `OtpDeliveryProvider` adapter with a demo code `123456`, and support email OTP as an alternative.)
+8. **Security first:** PIN + OTP, device binding, step-up checks, append-only ledger, complete audit logs.
+
+---
+
+## PART 2: TECH STACK AND ARCHITECTURE
+
+- **Frontend:** React + TypeScript + Vite, Tailwind CSS, shadcn/ui, React Router, TanStack Query, Recharts, react-i18next.
+- **PWA:** installable, service worker, offline cache for NAV, balances and history; queued actions with a clear "pending" state.
+- **Backend:** Supabase (Postgres, Auth, Row Level Security, Storage, Edge Functions, scheduled jobs). Fallback: Node/Express + Postgres + Prisma.
+- **Auth:** phone or email + OTP (via adapter), PIN for returning users.
+- **Scheduled jobs:** daily NAV strike, daily income accrual, reserve-ratio check, ledger integrity check, statement generation.
+- **Structure:** `/adapters`, `/nav-engine`, `/ledger`, `/fund-ops`, `/custody`, `/i18n`, `/components`, `/pages`, `/roles`. Document each in the README.
+
+---
+
+## PART 3: DESIGN SYSTEM
+
+- **Look:** calm, trustworthy, premium, like a modern savings app. Silver-and-charcoal base with a warm accent. Never casino-like.
+  - Background `#F7F8FA`, surface `#FFFFFF`, text `#1B1F24`, silver `#B8BEC6`, deep slate `#2B3440`, up `#1F8A4C`, down `#C0392B`, highlight amber `#E0A100`. Full dark mode and high-contrast mode.
+- **Type:** Inter or Noto Sans (Swahili diacritics), tabular numerals, 16px base (18px on simple wallet screens).
+- **Never rely on colour alone:** arrows and text accompany colour.
+- **Navigation:** bottom tabs on mobile (**Home, Fund, Invest, Portfolio, More**); sidebar on desktop for admin/operator/compliance/auditor.
+- **Always visible:** today's NAV per unit, DEMO badge, language switch.
+
+---
+
+## PART 4: FEATURES, SCREEN BY SCREEN
+
+### 4.1 Onboarding
+1. Language picker.
+2. Phone/email + OTP, then create PIN.
+3. **"What is FEDHA Silver MMF?"** 3 swipeable cards: what the fund holds (silver + a cash sleeve), how NAV works, what the risks are.
+4. Tiered KYC prompt (Tier 0 can start with low limits).
+5. Notification preferences (in-app / push / email) and optional NAV alert thresholds.
+
+### 4.2 Home
+- **NAV card:** today's NAV per unit (KSh), change vs yesterday (arrow + %), mini 30-day chart, "Strike time: 17:00 EAT" with countdown to next NAV.
+- **Portfolio card:** units held, current value (KSh large), total return since first subscription (split into silver movement, income, fees).
+- Quick actions: **Subscribe, Redeem, Send units, Receive**.
+- "Today in silver" one-liner in plain language.
+- Recent activity (5 items), pending requests, active alerts.
+
+### 4.3 The Fund (transparency centre)
+- **Fund overview:** NAV per unit, total fund value, units outstanding, **units remaining before cap**, reserve ratio gauge.
+- **Holdings:** 
+  - Physical silver reserve: **200,000 g (200 kg)** base, purity, vault location, insurance status, last attestation date.
+  - Liquidity sleeve: instruments, amounts, average maturity, current yield.
+  - Allocation donut: silver % vs liquidity %, against targets.
+- **NAV history:** daily NAV chart with ranges 1M / 3M / 6M / 1Y / ALL, table view and CSV download.
+- **Return breakdown** chart: how much of NAV change came from silver price, income and fees.
+- **Indicative income rate:** current annualised yield of the liquidity sleeve, labelled "Indicative, not guaranteed, applies to the cash sleeve only".
+- **Factsheet** (auto-generated monthly, downloadable PDF): objective, holdings, fees, performance, risk, custodian, auditor.
+- **Fees page:** management fee, redemption fee, with worked examples.
+- **Documents:** fund rules/prospectus placeholder, risk disclosure, custodian attestation (placeholder), audit reports.
+
+### 4.4 Invest (Subscribe and Redeem)
+**Subscribe**
+- Numeric keypad; amount in payment currency (minimum **0.01**); live conversion both ways ("Pay KSh 0.01 → receive 0.00020000 units"); quick-pick chips 0.01 / 0.10 / 1 / 10 / 50 / 100 / 500; custom amount.
+- Priced at the **next NAV strike** by default (forward pricing: orders received before the daily cut-off, 16:00 EAT, are priced at that day's NAV), with an optional **"Instant subscribe"** toggle that uses an indicative intraday NAV (spread shown) when the fund has available capacity.
+- Confirmation: amount, fees, NAV or indicative NAV used, units to receive, **60-second price lock** for instant orders, PIN to confirm. Warn if effective fee exceeds 3%.
+- Funding: from wallet KSh balance or via mobile-money-style deposit (mock rail). Rail minimums are handled: for sub-minimum purchases, offer to buy from wallet balance ("Top up once, then invest in tiny amounts").
+- **Recurring subscriptions** (e.g., KSh 10 every Friday) and **round-up** (spare change from wallet transactions) as optional features.
+
+**Redeem**
+- Redeem to KSh wallet from 0.01 in value. Normal settlement: **same day** from the liquidity sleeve (within a daily instant-redemption limit per investor and per fund; larger redemptions settle T+1 or T+2 while the fund sells or rebalances; messages show the expected time honestly).
+- **Physical silver redemption:** larger practical minimum (admin-set, default 5 g worth), KYC Tier 1+, fee quote, pickup code (OTP + QR); Custodian Operator releases against the code; status *Requested → Ready → Collected*. No second-person sign-off required (see 5.7 compensating controls).
+- **Fund gates (disclosed, admin-controlled):** daily redemption cap and suspension powers during extreme conditions, with a plain-language banner explaining why.
+
+### 4.5 Portfolio and Wallet
+- Balances: KSh cash wallet, FEDHA units.
+- **Send/Receive units** to another investor (phone/email/ID/QR) with fee waiver for small amounts.
+- **Deposit/Withdraw KSh** (mock mobile money/bank).
+- **Transaction history** with detail screens (line items, NAV used, fees, status, receipt).
+- **Statements:** monthly and on-demand PDF/CSV; annual tax-style summary.
+- **Income view:** accrued income to date and how it is applied (accumulating in NAV). Optional setting to **distribute income as additional units monthly** instead.
+- **What-if tool:** "If silver falls 10%, your KSh 5,000 position would be worth about KSh X" with disclaimer.
+- Security: PIN, device binding, step-up OTP for large actions, login history, **social recovery** (3 trusted contacts, any 2 approve after a 72-hour delay; notifications by in-app/push/email).
+
+### 4.6 Alerts and Notices
+- NAV alerts (above/below threshold, % move), order status, redemption ready, income distribution, large login, recovery requested, fund notices (suspension, capacity, rule changes).
+- Channels: in-app, push, email only. Quiet hours. Templates per language with variables. Delivery log in `message_outbox`.
+
+### 4.7 Public pages (no login)
+- Live indicative NAV and daily official NAV, fund size, holdings summary, reserve ratio, fees, risk page, how-it-works page, latest factsheet.
+
+---
+
+## PART 5: BUSINESS LOGIC (implement properly, unit-tested)
+
+### 5.1 Launch calibration
+```
+launchNav = 50.00 KSh
+gramsPerUnit = launchNav / silverKshPerGram(launchDate)   // fixed forever after launch
+baseReserveGrams = 200000
+maxUnits = floor(baseReserveGrams × (1 − reserveBuffer) / gramsPerUnit)
+```
+`reserveBuffer` default 2% (covers fees, rounding and handling). Store `gramsPerUnit`, `launchDate`, `baseReserveGrams` in a versioned `fund_config` table; changes require an audit-logged admin action and are shown publicly.
+
+### 5.2 NAV engine (daily strike at 17:00 EAT)
+```
+silverValue  = reserveFineGrams × silverKshPerGram (TWAP at strike)
+cashSleeve   = liquidity sleeve market value (incl. accrued income)
+liabilities  = accrued fees and expenses
+NAV per unit = (silverValue + cashSleeve − liabilities) / unitsOutstanding
+```
+- Use a **TWAP** of silver price around the strike window (default 15 min) and multi-source median when several adapters are enabled; pause the strike and flag if data is stale or sources disagree beyond a tolerance.
+- NAV rounded to 4 decimals for display, 8 decimals internally.
+- Store `nav_history` with inputs (price, FX, sleeve value, units) so every NAV is reproducible and auditable.
+- **Daily income accrual:** `income = cashSleeveValue × annualRate / 365`, added to the sleeve (and therefore NAV); rate from the `TreasuryRateAdapter`.
+- **Daily fee accrual:** `fee = fundValue × annualMgmtFee / 365` (default 0.50% p.a., admin-configurable) booked to liabilities and paid out monthly.
+- Silver reserve is **fixed at 200 kg** unless a custodian adjustment is recorded (see 5.7); NAV per unit therefore changes mainly with the silver price and income.
+
+### 5.3 Subscription and redemption pricing
+- **Forward pricing:** orders before cut-off are priced at that day's strike NAV; after cut-off, next day's.
+- **Instant orders:** indicative NAV = last official NAV adjusted by silver price move since strike (TWAP) ± a configurable **dealing spread** (default 0.50%) shown transparently. 
+- Subscription units = `(amountPaid − fees) / navUsed`, 8 decimals. Redemption proceeds = `units × navUsed − fees`.
+- Subscriptions rejected when `unitsOutstanding + newUnits > maxUnits`; partial fills allowed up to cap; remainder waitlisted.
+- **Cash received from subscriptions** is allocated per the target allocation (default **90% silver / 10% cash sleeve**). Because the base reserve is fixed at 200 kg, any additional silver required to maintain backing is recorded as a **custodian purchase** (simulated through `CustodyAdapter`) and increases `reserveFineGrams` only when the operator records the purchase; until then, the cash is held in the sleeve and the reserve ratio shows the true position.
+
+### 5.4 Reserve ratio and liquidity management
+- `reserveRatio = (silverValue + cashSleeve) / (unitsOutstanding × NAV)` is by definition near 100%; additionally track **silver backing coverage** = `reserveFineGrams × (1 − buffer) / (unitsOutstanding × gramsPerUnit)`. It must stay ≥ 100%. Amber below 105%, red below 100% (new subscriptions pause automatically when coverage would fall below 100%).
+- **Liquidity coverage** = cashSleeve ÷ expected 3-day redemptions. Amber below 150%, red below 100%. When red, instant redemptions are limited and the UI explains honestly with expected timing.
+- Daily and per-investor redemption limits are admin-configurable.
+
+### 5.5 Fees (configurable, always itemised)
+- Management fee: 0.50% p.a. (accrued in NAV).
+- Dealing spread: 0.50% on instant orders; none on forward-priced orders.
+- Redemption fee: 0% for units held over 30 days; 0.50% under 30 days (anti-churn, configurable).
+- Physical redemption fee: handling + assay/packaging, quoted before confirming.
+- Tiny-purchase **fee waiver:** amounts under a configurable threshold (default KSh 10) pay no dealing spread or fee (funded from the manager's fee pool). Always show effective fee %.
+
+### 5.6 Ledger
+- **Double-entry, append-only, hash-chained** (`prev_hash`, `row_hash`); corrections are reversing entries. All amounts as integers (units: 1 = 0.00000001 unit; money: minor units). **Never use floating point for money.**
+- Invariants: sum of investor unit balances (plus pending issuance) = `unitsOutstanding`; cash balances reconcile to the bank-rail mock; fee and income accruals reconcile to NAV inputs. Check after every strike and nightly; show a visible ledger health indicator.
+
+### 5.7 Controls (no manual sign-off gate; automated compensating controls instead)
+Manual two-person sign-off is **not** required for custody records or physical release. Instead, implement:
+- **Single-operator actions are fully logged**: operator ID, timestamp, photos/weights, device, and immutable audit entries; the Auditor role sees them in real time.
+- **Daily custodian attestation** via `CustodyAdapter.getAttestation()` compared automatically with the system's `reserveFineGrams`; any mismatch above tolerance **auto-pauses subscriptions and physical redemptions** and alerts Admin and Compliance.
+- **Reserve and coverage guards** (5.4) enforced in code, not by approval.
+- **Per-operator limits** (max physical release per day), pickup-code verification and anomaly detection (unusual release patterns).
+- **Change protection** on `fund_config`, `reserve_holdings` and fee settings: allowed, but versioned, publicly visible and alerted.
+Explain in the README that removing manual sign-off increases operational risk and that the production operator should consider adding it back.
+
+### 5.8 Risk controls
+- Tiered KYC limits (Tier 0 phone/email only, Tier 1 ID, Tier 2 enhanced) with daily/monthly caps and a visible "You can still invest up to X today."
+- Rate-limit rapid micro-orders; velocity and structuring detection to the suspicious-activity queue.
+- Device binding, step-up OTP, recovery delay, session management.
+- Price circuit breaker: if silver moves more than X% in Y minutes, instant orders pause and the UI explains; forward-priced orders continue.
+
+### 5.9 Adapters (swap-in points with working mocks)
+```ts
+interface SilverPriceAdapter { getSpot(): Promise<{usdPerOz:number, retrievedAt:Date, source:string, isDemo:boolean}> }
+interface FxAdapter { getRate(pair:'KES/USD'|'KES/EUR'|'KES/GBP'): Promise<number> }
+interface TreasuryRateAdapter { getYield(tenor:'91d'|'182d'|'364d'|'call'): Promise<{annualRate:number, retrievedAt:Date, source:string, isDemo:boolean}> }
+interface CustodyAdapter { getAttestation(): Promise<{fineGrams:bigint, asOf:Date, vaultId:string, ref:string}>; recordRelease(...): Promise<void> }
+interface FiatRailProvider { collect(...); disburse(...); limits(): { minCollect:bigint, minDisburse:bigint, maxCollect:bigint, maxDisburse:bigint } }
+interface KycProvider { verify(tier:number,data:object): Promise<KycResult> }
+interface OtpDeliveryProvider { send(to:string,code:string): Promise<void> }
+interface LedgerProvider { /* default InternalPostgresLedger; later an on-chain or registry provider */ }
+```
+Document how to replace each, with TODOs wherever a licensed partner, audit or legal approval is required.
+
+---
+
+## PART 6: DATA MODEL (create all tables with RLS)
+
+`users`, `user_roles`, `profiles`, `kyc_records`, `devices`, `sessions`, `wallets`, `unit_balances`, `ledger_entries` (double-entry, hash-chained), `fund_config` (versioned), `nav_history` (with inputs), `price_points`, `rate_snapshots`, `treasury_rates`, `liquidity_instruments`, `income_accruals`, `fee_accruals`, `reserve_holdings` (base 200 kg, purity, vault, insurance, attestations), `custody_events` (operator actions, photos, weights), `attestations`, `orders` (subscribe/redeem, forward/instant, status, NAV applied), `quotes` (instant-order quotes with expiry), `waitlist`, `redemption_requests`, `pickup_codes`, `recurring_plans`, `distributions`, `statements`, `purchase_limits`, `tier_limits`, `fee_schedule`, `circuit_breaker_events`, `fund_notices`, `recovery_contacts`, `recovery_requests`, `alerts`, `alert_preferences`, `message_templates`, `message_outbox`, `suspicious_activity`, `audit_log`, `feature_flags`, `data_source_status`.
+
+RLS: investors read only their own wallets, orders, statements; operators see custody records; compliance sees KYC and flags; auditors read aggregates and logs; all admin actions audited.
+
+---
+
+## PART 7: ADMIN AND OPERATIONS CONSOLE
+
+- **Fund dashboard:** units outstanding vs cap, NAV, silver backing coverage, liquidity coverage, reserve holdings, allocation vs targets.
+- **NAV operations:** run/rerun strike (with approval note), view inputs, flag and override-with-reason workflow (fully logged), publish NAV.
+- **Pricing and rates:** enable/disable silver, FX and treasury-rate adapters, TWAP window, stale-data limit, tolerance, circuit-breaker thresholds, source health.
+- **Fees and limits:** management fee, spreads, redemption fee, minimums per currency (`purchase_limits`, default 0.01), tier limits, redemption caps, rail minimums, with version history.
+- **Allocation and liquidity:** target silver/cash split, sleeve instruments, simulated custodian purchases, rebalancing log.
+- **Custody:** record holdings, operator actions, attestations and mismatch alerts.
+- **Compliance:** KYC queue, suspicious-activity queue, case notes, account freezes, regulatory exports.
+- **Notices:** publish fund notices and factsheets.
+- **Audit log** and on-demand **ledger integrity check** with hash-chain verification.
+- **Regulatory Readiness Checklist** (editable): the operator must obtain legal advice on Kenya's rules for collective investment schemes/money market funds, virtual-asset and payments regulation, and data protection (including approval or licensing from the relevant regulators such as the Capital Markets Authority where applicable); a licensed trustee/custodian and insurer for the silver; an independent audit; AML/CFT procedures; and a licensed payment partner. State plainly that the demo has no regulatory approval and must not be used for real money until these are complete.
+
+---
+
+## PART 8: SEED DATA (make the demo feel real)
+
+All clearly labelled DEMO:
+- Launch NAV KSh 50.00 on a demo launch date; `gramsPerUnit` computed from the mock silver price; `maxUnits` computed from the 200 kg base reserve; 12 months of daily NAV history built from mock silver prices, income accrual and fees, with 3–4 notable silver moves.
+- Fund holdings: 200,000 g silver at one demo vault (with a custodian attestation), liquidity sleeve with 3 demo treasury instruments and an indicative yield.
+- 80 demo investors with varied holdings (units outstanding at about 40% of cap), 1 custodian operator, 1 fund manager/admin, 1 compliance officer, 1 auditor. Demo-account switcher on the login screen.
+- **Storylines (5-minute demo):**
+  1. **Amina** subscribes KSh 0.01 from her wallet balance, sees 8-decimal units, the fee waiver, and the forward-priced NAV time.
+  2. **Brian** subscribes KSh 5,000 with instant pricing, sees the dealing spread and the 60-second price lock, then sets a NAV alert.
+  3. **Daily strike:** the NAV engine runs, shows inputs (silver TWAP, sleeve value, accrued fees/income), publishes NAV and the return breakdown.
+  4. **Redemption:** Brian redeems part to KSh the same day; another investor redeems a large amount and sees the T+1 message because of the daily cap.
+  5. **Physical silver:** an investor redeems 10 g physical, gets a pickup code, the operator releases it, and the audit log and attestation reflect it.
+  6. **Mismatch alert:** a simulated custody attestation mismatch auto-pauses subscriptions and physical redemptions; Admin resolves and resumes.
+  7. **Circuit breaker:** a simulated 6% silver spike pauses instant orders; forward-priced orders continue.
+  8. **Cap reached:** subscriptions hit the cap, the waitlist and "Fund at capacity" banner appear.
+  9. **Recovery:** an investor loses a phone; two trusted contacts approve; the 72-hour delay is shown.
+
+---
+
+## PART 9: RISKS TO DESIGN FOR IN THE PRODUCT
+
+| Risk | In-product response |
+|---|---|
+| Silver price falls | KSh-first display, return breakdown, "what if silver falls 10%?" tool, NAV alerts, prominent risk language |
+| Redemption run / liquidity squeeze | Liquidity coverage tracking, daily caps, honest settlement messages, fund gates with clear banners |
+| Reserve mismatch / custody error | Daily attestation vs system reconciliation with auto-pause, immutable operator logs, auditor read access |
+| Single-operator misuse (no sign-off) | Per-operator limits, pickup-code verification, anomaly detection, real-time auditor visibility, README warning |
+| Bad price data | TWAP, multi-source median, tolerance checks, stale-data pause, NAV override only with logged reason |
+| Fund at capacity | Hard cap tied to 200 kg reserve, waitlist, transparent capacity display |
+| Money laundering / misuse | Tiered KYC, limits, velocity and structuring detection, suspicious-activity queue |
+| Lost phone | Social recovery with delay and notifications, device binding |
+
+---
+
+## PART 10: NON-FUNCTIONAL REQUIREMENTS
+
+- Performance: first meaningful paint under 3s on 3G emulation; route-level code splitting.
+- Security: zod validation on every input, OTP rate limiting, secure sessions, secrets in env vars, least-privilege RLS, idempotency keys on every money-moving request.
+- Observability: error boundary, structured logs, health-check route, ledger and NAV health indicators.
+- Privacy: align with Kenya's Data Protection Act principles; data export and delete-my-data (subject to financial record retention, explained in the UI).
+- i18n: no hard-coded strings; locale formatting for dates, numbers, currency.
+- Responsive 320px to 1440px+.
+
+---
+
+## PART 11: BUILD ORDER (confirm each step works before continuing)
+
+1. Scaffold, design tokens, i18n, PWA shell, role-aware routing, demo-account switcher, DEMO badge.
+2. Database schema, RLS, seed data, mock adapters.
+3. Ledger (hash-chained) + fee engine + launch calibration + fund config, with tests.
+4. NAV engine (strike, TWAP, income and fee accrual) with tests; NAV history and return breakdown.
+5. Wallet, deposits/withdrawals (mock rail), unit transfers, history, receipts.
+6. Subscribe and redeem (forward and instant pricing, 0.01 minimum, price lock, fee waiver, cap and waitlist).
+7. Fund transparency pages, factsheet generator, public pages.
+8. Liquidity and reserve controls, redemption caps, fund gates, circuit breaker.
+9. Custody module: holdings, operator actions, physical redemption, attestation reconciliation and auto-pause.
+10. Alerts and notices (in-app, push, email), recurring plans, round-up, statements.
+11. KYC tiers, limits, social recovery, suspicious-activity queue.
+12. Admin console, Regulatory Readiness Checklist, audit log, ledger integrity check.
+13. Polish: accessibility, performance, empty/loading/error states, README (setup, env vars, adapter swapping, demo script, risk notes).
+
+---
+
+## PART 12: ACCEPTANCE CRITERIA (done only when all are true)
+
+- [ ] Launch calibration sets NAV at KSh 50.00, fixes `gramsPerUnit`, and computes `maxUnits` from the 200 kg base reserve; changing the mock silver price changes NAV afterward, not the unit's silver content.
+- [ ] A subscription of exactly **0.01** (KSh) succeeds from wallet balance with correct 8-decimal units and balanced ledger; 0.009 is rejected with a friendly message; the minimum works in USD, EUR and GBP and can be edited in Admin.
+- [ ] Forward-priced and instant subscriptions price correctly; instant orders show the spread and a 60-second lock that rejects expired quotes.
+- [ ] Subscriptions are blocked at the unit cap with a waitlist, and when silver backing coverage would fall below 100%.
+- [ ] The daily NAV strike runs, stores every input, and reproduces the same NAV when recomputed; income and fee accruals appear in the return breakdown.
+- [ ] Redemptions pay out same day within limits and show an honest T+1/T+2 message beyond them; physical redemption works end to end with a pickup code and a single-operator release, fully logged.
+- [ ] A simulated custody mismatch auto-pauses subscriptions and physical redemptions and alerts Admin and Compliance.
+- [ ] Circuit breaker pauses instant orders on a large price move and resumes correctly.
+- [ ] Ledger integrity check passes; tampering with any row is detected in tests; 1,000 random micro-transactions leave total units and balances exactly equal.
+- [ ] No USSD, SMS, order book, escrow or producer-deposit screens or code paths exist.
+- [ ] Social recovery works with the 72-hour delay and notifications.
+- [ ] RLS tests confirm investors cannot read others' wallets, orders or KYC.
+- [ ] Every screen shows the DEMO badge, source attribution and risk language; no figure is presented as live unless it is.
+- [ ] Regulatory Readiness Checklist and README risk chapter (including the no-sign-off warning) are present and honest.
+- [ ] Usable at 360px width and passes basic accessibility checks.
+
+---
+
+## PART 13: TONE AND COPY
+
+- Plain, calm, respectful. Short sentences. Examples: "Today's NAV is KSh 51.3240 per unit, up 0.8%." / "You are investing KSh 0.01 and receiving 0.00019484 units. Fee: none (small amount)." / "Silver can go down as well as up."
+- Avoid hype, urgency tricks, guarantees and jargon on simple screens.
+- Every empty state explains the next step in one sentence with a clear button.
+
+---
+
+## FINAL INSTRUCTIONS TO THE GENERATOR
+
+Build the full application end to end, not a landing page or mockup. Use real routing, real state, a real database schema and working logic for launch calibration, NAV strike, income and fee accrual, subscriptions and redemptions, ledger and custody reconciliation. Where a live external service would be needed (silver price, FX, treasury rates, custody, mobile money, KYC, OTP delivery), implement the clean adapter with a working mock and clear documentation instead of faking an integration. If any requirement conflicts with a platform limit, say what you simplified and how to complete it later; do not silently drop features. Start with Step 1 of the Build Order, then proceed step by step.
